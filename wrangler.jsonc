@@ -4,7 +4,7 @@
  */
  {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "vite-cf-do-runner",
+	"name": "codepulse-github-vel-erzhxg2ipyzw28fqibbu4",
 	"main": "worker/index.ts",
 	"compatibility_date": "2025-04-24",
 	"assets": {
