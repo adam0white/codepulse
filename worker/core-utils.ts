@@ -8,4 +8,5 @@ export { GlobalDurableObject };
 
 export type Env = {
     GlobalDurableObject: DurableObjectNamespace<GlobalDurableObject>;
+    GITHUB_TOKEN?: string;
 }
