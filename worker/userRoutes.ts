@@ -20,8 +20,8 @@ const detailedCommitSchema = z.object({
     message: z.string(),
   }),
   stats: z.object({
-    additions: z.number(),
-    deletions: z.number(),
+    additions: z.number().optional(),
+    deletions: z.number().optional(),
   }).optional(),
 });
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
@@ -112,8 +112,8 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
                 const previousDate = new Date(previousCommit.commit.author.date);
                 const timeDiffMinutes = differenceInMinutes(currentDate, previousDate);
                 const interval = Math.max(timeDiffMinutes, 1);
-                const additions = currentCommit.stats.additions;
-                const deletions = currentCommit.stats.deletions;
+                const additions = currentCommit.stats.additions || 0;
+                const deletions = currentCommit.stats.deletions || 0;
                 const totalChanges = additions + deletions;
                 const velocity = totalChanges / interval;
                 analysisData.push({

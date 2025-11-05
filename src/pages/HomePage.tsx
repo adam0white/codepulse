@@ -114,6 +114,13 @@ export function HomePage() {
     }
     return format(date, 'MMM d');
   };
+  const filteredData = useMemo(() => {
+    if (!analysisData) return [];
+    if (useLogScale) {
+      return analysisData.filter(d => d.velocity > 0);
+    }
+    return analysisData;
+  }, [analysisData, useLogScale]);
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data: ChartDataPoint = payload[0].payload;
@@ -225,10 +232,10 @@ export function HomePage() {
                   <CardContent>
                     <div className="h-[400px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <RechartsLineChart data={analysisData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                        <RechartsLineChart data={filteredData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                           <XAxis dataKey="date" tickFormatter={tickFormatter} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                          <YAxis scale={useLogScale ? "log" : "linear"} domain={useLogScale ? [1, 'auto'] : [0, 'auto']} allowDataOverflow={useLogScale} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <YAxis scale={useLogScale ? "log" : "linear"} domain={useLogScale ? ['auto', 'auto'] : [0, 'auto']} allowDataOverflow={useLogScale} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent))' }} />
                           <Line type="monotone" dataKey="velocity" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
                         </RechartsLineChart>
