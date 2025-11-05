@@ -1,148 +1,223 @@
-// Home page of the app, Currently a demo page for demonstration.
-// Please rewrite this file to implement your own logic. Do not replace or delete it, simply rewrite this HomePage.tsx file.
-import { useEffect } from 'react'
-import { Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { Toaster, toast } from '@/components/ui/sonner'
-import { create } from 'zustand'
-import { useShallow } from 'zustand/react/shallow'
-import { AppLayout } from '@/components/layout/AppLayout'
-
-// Timer store: independent slice with a clear, minimal API, for demonstration
-type TimerState = {
-  isRunning: boolean;
-  elapsedMs: number;
-  start: () => void;
-  pause: () => void;
-  reset: () => void;
-  tick: (deltaMs: number) => void;
-}
-
-const useTimerStore = create<TimerState>((set) => ({
-  isRunning: false,
-  elapsedMs: 0,
-  start: () => set({ isRunning: true }),
-  pause: () => set({ isRunning: false }),
-  reset: () => set({ elapsedMs: 0, isRunning: false }),
-  tick: (deltaMs) => set((s) => ({ elapsedMs: s.elapsedMs + deltaMs })),
-}))
-
-// Counter store: separate slice to showcase multiple stores without coupling
-type CounterState = {
-  count: number;
-  inc: () => void;
-  reset: () => void;
-}
-
-const useCounterStore = create<CounterState>((set) => ({
-  count: 0,
-  inc: () => set((s) => ({ count: s.count + 1 })),
-  reset: () => set({ count: 0 }),
-}))
-
-function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Github, Zap, AlertTriangle, LineChart, Plus, Minus, GitCommit, User, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Toaster, toast } from 'sonner';
+import {
+  ResponsiveContainer,
+  LineChart as RechartsLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts';
+import { format, parseISO } from 'date-fns';
+import type { ApiResponse, AnalysisData, ChartDataPoint } from '@shared/types';
+type Status = 'idle' | 'loading' | 'success' | 'error';
 export function HomePage() {
-  // Select only what is needed to avoid unnecessary re-renders
-  const { isRunning, elapsedMs } = useTimerStore(
-    useShallow((s) => ({ isRunning: s.isRunning, elapsedMs: s.elapsedMs })),
-  )
-  const start = useTimerStore((s) => s.start)
-  const pause = useTimerStore((s) => s.pause)
-  const resetTimer = useTimerStore((s) => s.reset)
-  const count = useCounterStore((s) => s.count)
-  const inc = useCounterStore((s) => s.inc)
-  const resetCount = useCounterStore((s) => s.reset)
-
-  // Drive the timer only while running; avoid update-depth issues with a scoped RAF
-  useEffect(() => {
-    if (!isRunning) return
-    let raf = 0
-    let last = performance.now()
-    const loop = () => {
-      const now = performance.now()
-      const delta = now - last
-      last = now
-      // Read store API directly to keep effect deps minimal and stable
-      useTimerStore.getState().tick(delta)
-      raf = requestAnimationFrame(loop)
+  const [url, setUrl] = useState('');
+  const [status, setStatus] = useState<Status>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!url) {
+      toast.error('Please enter a GitHub repository URL.');
+      return;
     }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
-  }, [isRunning])
-
-  const onPleaseWait = () => {
-    inc()
-    if (!isRunning) {
-      start()
-      toast.success('Building your app…', {
-        description: 'Hang tight, we\'re setting everything up.',
-      })
-    } else {
-      pause()
-      toast.info('Taking a short pause', {
-        description: 'We\'ll continue shortly.',
-      })
+    setStatus('loading');
+    setError(null);
+    setAnalysisData(null);
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const result = (await response.json()) as ApiResponse<AnalysisData>;
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'An unknown error occurred.');
+      }
+      setAnalysisData(result.data || []);
+      setStatus('success');
+      toast.success('Analysis complete!');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setError(errorMessage);
+      setStatus('error');
+      toast.error('Analysis Failed', { description: errorMessage });
     }
-  }
-
-  const formatted = formatDuration(elapsedMs)
-
+  };
+  const summaryStats = useMemo(() => {
+    if (!analysisData || analysisData.length === 0) {
+      return { peak: 0, average: 0, totalChanges: 0, totalCommits: 0 };
+    }
+    const totalVelocity = analysisData.reduce((sum, d) => sum + d.velocity, 0);
+    const totalChanges = analysisData.reduce((sum, d) => sum + d.additions + d.deletions, 0);
+    return {
+      peak: Math.max(...analysisData.map(d => d.velocity)),
+      average: totalVelocity / analysisData.length,
+      totalChanges: totalChanges,
+      totalCommits: analysisData.length + 1, // +1 for the initial commit not in data
+    };
+  }, [analysisData]);
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data: ChartDataPoint = payload[0].payload;
+      return (
+        <Card className="text-sm shadow-lg">
+          <CardContent className="p-3 space-y-2">
+            <p className="font-bold text-foreground">{format(parseISO(data.date), 'MMM d, yyyy HH:mm')}</p>
+            <p className="font-mono text-xs text-muted-foreground truncate max-w-xs">{data.message}</p>
+            <div className="border-t pt-2 mt-2 space-y-1">
+              <p className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5"><Zap className="size-3.5 text-primary" /> Velocity:</span>
+                <span className="font-semibold">{data.velocity.toFixed(2)} lines/min</span>
+              </p>
+              <p className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5"><Plus className="size-3.5 text-green-500" /> Additions:</span>
+                <span className="font-semibold text-green-500">{data.additions}</span>
+              </p>
+              <p className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5"><Minus className="size-3.5 text-red-500" /> Deletions:</span>
+                <span className="font-semibold text-red-500">{data.deletions}</span>
+              </p>
+              <p className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5"><User className="size-3.5" /> Author:</span>
+                <span className="font-semibold">{data.author}</span>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+    return null;
+  };
   return (
-    <AppLayout>
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4 overflow-hidden relative">
-        <ThemeToggle />
-        <div className="absolute inset-0 bg-gradient-rainbow opacity-10 dark:opacity-20 pointer-events-none" />
-        <div className="text-center space-y-8 relative z-10 animate-fade-in">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-primary floating">
-              <Sparkles className="w-8 h-8 text-white rotating" />
-            </div>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-display font-bold text-balance leading-tight">
-            Creating your <span className="text-gradient">app</span>
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto text-pretty">
-            Your application would be ready soon.
-          </p>
-          <div className="flex justify-center gap-4">
-            <Button 
-              size="lg"
-              onClick={onPleaseWait}
-              className="btn-gradient px-8 py-4 text-lg font-semibold hover:-translate-y-0.5 transition-all duration-200"
-              aria-live="polite"
-            >
-              Please Wait
+    <div className="min-h-screen w-full bg-background bg-gradient-subtle dark:bg-gradient-subtle">
+      <ThemeToggle className="fixed top-4 right-4" />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="py-12 md:py-16 lg:py-20 text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-tighter">
+              Code<span className="text-primary">Pulse</span>
+            </h1>
+            <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
+              Analyze the development velocity of any public GitHub repository.
+            </p>
+          </motion.div>
+          <motion.form
+            onSubmit={handleSubmit}
+            className="mt-8 max-w-xl mx-auto flex items-center space-x-2"
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <Github className="h-5 w-5 text-muted-foreground" />
+            <Input
+              type="url"
+              placeholder="https://github.com/facebook/react"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={status === 'loading'}
+              className="flex-grow"
+            />
+            <Button type="submit" disabled={status === 'loading'} className="min-w-[120px]">
+              {status === 'loading' ? (
+                <span className="animate-pulse">Analyzing...</span>
+              ) : (
+                <>
+                  <Zap className="mr-2 h-4 w-4" /> Analyze
+                </>
+              )}
             </Button>
-          </div>
-          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div>
-              Time elapsed: <span className="font-medium tabular-nums text-foreground">{formatted}</span>
-            </div>
-            <div>
-              Coins: <span className="font-medium tabular-nums text-foreground">{count}</span>
-            </div>
-          </div>
-          <div className="flex justify-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { resetTimer(); resetCount(); toast('Reset complete') }}>
-              Reset
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => { inc(); toast('Coin added') }}>
-              Add Coin
-            </Button>
-          </div>
+          </motion.form>
         </div>
-        <footer className="absolute bottom-8 text-center text-muted-foreground/80">
-          <p>Powered by Cloudflare</p>
-        </footer>
-        <Toaster richColors closeButton />
-      </div>
-    </AppLayout>
-  )
+        <div className="pb-12 md:pb-16 lg:pb-20">
+          <AnimatePresence mode="wait">
+            {status === 'loading' && (
+              <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+                <Skeleton className="h-[400px] w-full rounded-xl" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <Skeleton className="h-32 w-full rounded-xl" />
+                  <Skeleton className="h-32 w-full rounded-xl" />
+                  <Skeleton className="h-32 w-full rounded-xl" />
+                  <Skeleton className="h-32 w-full rounded-xl" />
+                </div>
+              </motion.div>
+            )}
+            {status === 'error' && error && (
+              <motion.div key="error" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Analysis Failed</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+            {status === 'success' && analysisData && (
+              <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><LineChart className="text-primary" /> Commit Velocity</CardTitle>
+                    <CardDescription>Lines of code changed (additions + deletions) per minute between commits.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[400px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsLineChart data={analysisData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(str) => format(parseISO(str), 'MMM d')}
+                            stroke="hsl(var(--muted-foreground))"
+                            fontSize={12}
+                          />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent))' }} />
+                          <Line type="monotone" dataKey="velocity" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <StatCard title="Peak Velocity" value={`${summaryStats.peak.toFixed(2)} lpm`} icon={Zap} />
+                  <StatCard title="Average Velocity" value={`${summaryStats.average.toFixed(2)} lpm`} icon={Clock} />
+                  <StatCard title="Total Changes" value={summaryStats.totalChanges.toLocaleString()} icon={GitCommit} />
+                  <StatCard title="Commits Analyzed" value={summaryStats.totalCommits.toLocaleString()} icon={User} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </main>
+      <footer className="text-center py-6 text-sm text-muted-foreground">
+        Built with ❤️ at Cloudflare
+      </footer>
+      <Toaster richColors closeButton />
+    </div>
+  );
+}
+interface StatCardProps {
+  title: string;
+  value: string;
+  icon: React.ElementType;
+}
+function StatCard({ title, value, icon: Icon }: StatCardProps) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+  );
 }
