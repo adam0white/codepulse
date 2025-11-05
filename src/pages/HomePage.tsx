@@ -208,7 +208,7 @@ export function HomePage() {
                         <RechartsLineChart data={analysisData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                           <XAxis dataKey="date" tickFormatter={tickFormatter} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                          <YAxis scale={useLogScale ? "log" : "linear"} domain={useLogScale ? ['auto', 'auto'] : [0, 'auto']} allowDataOverflow={useLogScale} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <YAxis scale={useLogScale ? "log" : "linear"} domain={useLogScale ? [1, 'auto'] : [0, 'auto']} allowDataOverflow={useLogScale} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent))' }} />
                           <Line type="monotone" dataKey="velocity" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
                         </RechartsLineChart>
