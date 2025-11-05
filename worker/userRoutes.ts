@@ -14,15 +14,15 @@ const detailedCommitSchema = z.object({
   sha: z.string(),
   commit: z.object({
     author: z.object({
-      name: z.string(),
+      name: z.string().optional(),
       date: z.string().datetime(),
-    }),
+    }).nullable(),
     message: z.string(),
   }),
   stats: z.object({
     additions: z.number(),
     deletions: z.number(),
-  }),
+  }).optional(),
 });
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     // --- Existing Demo Routes ---
@@ -75,7 +75,10 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
                 return c.json({ success: false, error: 'Invalid GitHub repository URL path.' }, 400);
             }
             const [owner, repo] = pathParts;
-            const headers = { 'User-Agent': 'CodePulse-App' };
+            const headers: { 'User-Agent': string; Authorization?: string } = { 'User-Agent': 'CodePulse-App' };
+            if (c.env.GITHUB_TOKEN) {
+                headers.Authorization = `token ${c.env.GITHUB_TOKEN}`;
+            }
             const commitsUrl = `${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=100`;
             const commitsRes = await fetch(commitsUrl, { headers });
             if (commitsRes.status === 404) {
@@ -97,10 +100,14 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
                 .then(data => detailedCommitSchema.parse(data))
             );
             const detailedCommits = await Promise.all(commitDetailsPromises);
+            const validCommits = detailedCommits.filter(
+                (commit): commit is typeof commit & { stats: NonNullable<typeof commit['stats']>; commit: { author: NonNullable<typeof commit['commit']['author']> } & typeof commit['commit'] } =>
+                    !!commit.stats && !!commit.commit.author
+            );
             const analysisData: AnalysisData = [];
-            for (let i = 0; i < detailedCommits.length - 1; i++) {
-                const currentCommit = detailedCommits[i];
-                const previousCommit = detailedCommits[i + 1];
+            for (let i = 0; i < validCommits.length - 1; i++) {
+                const currentCommit = validCommits[i];
+                const previousCommit = validCommits[i + 1];
                 const currentDate = new Date(currentCommit.commit.author.date);
                 const previousDate = new Date(previousCommit.commit.author.date);
                 const timeDiffMinutes = differenceInMinutes(currentDate, previousDate);
@@ -113,7 +120,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
                     sha: currentCommit.sha,
                     date: currentDate.toISOString(),
                     velocity: parseFloat(velocity.toFixed(2)),
-                    author: currentCommit.commit.author.name,
+                    author: currentCommit.commit.author.name || 'Unknown Author',
                     message: currentCommit.commit.message.split('\n')[0],
                     additions,
                     deletions,
