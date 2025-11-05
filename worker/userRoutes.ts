@@ -76,7 +76,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
             }
             const [owner, repo] = pathParts;
             const headers = { 'User-Agent': 'CodePulse-App' };
-            const commitsUrl = `${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=30`;
+            const commitsUrl = `${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=100`;
             const commitsRes = await fetch(commitsUrl, { headers });
             if (commitsRes.status === 404) {
                 return c.json({ success: false, error: 'Repository not found. Please check the URL or ensure it is public.' }, 404);
