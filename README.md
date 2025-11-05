@@ -2,7 +2,7 @@
 
 CodePulse is a minimalist and visually elegant web application that analyzes the development velocity of any public GitHub repository. Users provide a GitHub URL, and the application fetches the commit history, calculates the rate of change (additions and deletions) per minute between consecutive commits, and visualizes this data on a stunning, interactive line chart. The application is designed with a 'less is more' philosophy, focusing on clarity, performance, and a delightful user experience. It provides key insights at a glance, such as peak velocity and average cadence, presented in clean, modern UI components. The entire experience is contained within a single, responsive page.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/adam0white/codepulse)
 
 ## Key Features
 
@@ -110,7 +110,7 @@ This project is designed for seamless deployment to Cloudflare Pages with a Func
 
 Alternatively, you can deploy directly from your GitHub repository using the button below.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/adam0white/codepulse)
 
 ## Contributing
 
