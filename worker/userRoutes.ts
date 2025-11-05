@@ -1,10 +1,29 @@
 import { Hono } from "hono";
 import { Env } from './core-utils';
-import type { DemoItem, ApiResponse, AnalysisRequest, AnalysisData, ChartDataPoint } from '@shared/types';
+import type { DemoItem, ApiResponse, AnalysisRequest, AnalysisData } from '@shared/types';
 import { z } from 'zod';
 import { differenceInMinutes } from 'date-fns';
 const GITHUB_API_BASE = 'https://api.github.com';
+// Zod Schemas for GitHub API responses
 const urlSchema = z.string().url().regex(/https?:\/\/github\.com\/[a-zA-Z0-9-]+\/[a-zA-Z0-9-._]+/);
+const commitListItemSchema = z.object({
+  sha: z.string(),
+});
+const commitListSchema = z.array(commitListItemSchema);
+const detailedCommitSchema = z.object({
+  sha: z.string(),
+  commit: z.object({
+    author: z.object({
+      name: z.string(),
+      date: z.string().datetime(),
+    }),
+    message: z.string(),
+  }),
+  stats: z.object({
+    additions: z.number(),
+    deletions: z.number(),
+  }),
+});
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
     // --- Existing Demo Routes ---
     app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
@@ -42,7 +61,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
         const data = await durableObjectStub.deleteDemoItem(id);
         return c.json({ success: true, data } satisfies ApiResponse<DemoItem[]>);
     });
-    // --- New CodePulse Route ---
+    // --- CodePulse Route ---
     app.post('/api/analyze', async (c) => {
         try {
             const body = await c.req.json<AnalysisRequest>();
@@ -68,13 +87,14 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
             if (!commitsRes.ok) {
                 throw new Error(`GitHub API error: ${commitsRes.statusText}`);
             }
-            const commitsList = await commitsRes.json() as any[];
+            const commitsList = commitListSchema.parse(await commitsRes.json());
             if (commitsList.length < 2) {
                 return c.json({ success: false, error: 'Not enough commits to analyze. A repository needs at least two commits.' }, 400);
             }
-            const commitDetailsPromises = commitsList.map(commit => 
+            const commitDetailsPromises = commitsList.map(commit =>
                 fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/commits/${commit.sha}`, { headers })
                 .then(res => res.json())
+                .then(data => detailedCommitSchema.parse(data))
             );
             const detailedCommits = await Promise.all(commitDetailsPromises);
             const analysisData: AnalysisData = [];
@@ -84,7 +104,6 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
                 const currentDate = new Date(currentCommit.commit.author.date);
                 const previousDate = new Date(previousCommit.commit.author.date);
                 const timeDiffMinutes = differenceInMinutes(currentDate, previousDate);
-                // Prevent division by zero and handle rapid commits
                 const interval = Math.max(timeDiffMinutes, 1);
                 const additions = currentCommit.stats.additions;
                 const deletions = currentCommit.stats.deletions;
@@ -95,7 +114,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
                     date: currentDate.toISOString(),
                     velocity: parseFloat(velocity.toFixed(2)),
                     author: currentCommit.commit.author.name,
-                    message: currentCommit.commit.message.split('\n')[0], // First line only
+                    message: currentCommit.commit.message.split('\n')[0],
                     additions,
                     deletions,
                 });
@@ -103,7 +122,8 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
             return c.json({ success: true, data: analysisData.reverse() } satisfies ApiResponse<AnalysisData>);
         } catch (error) {
             console.error('[ANALYZE ERROR]', error);
-            return c.json({ success: false, error: 'An unexpected error occurred during analysis.' }, 500);
+            const errorMessage = error instanceof z.ZodError ? 'Invalid data structure from GitHub API.' : 'An unexpected error occurred during analysis.';
+            return c.json({ success: false, error: errorMessage }, 500);
         }
     });
 }

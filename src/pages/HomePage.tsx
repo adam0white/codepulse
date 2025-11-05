@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Github, Zap, AlertTriangle, LineChart, Plus, Minus, GitCommit, User, Clock } from 'lucide-react';
+import { Github, Zap, AlertTriangle, LineChart, Plus, Minus, GitCommit, User, Clock, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Toaster, toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   ResponsiveContainer,
   LineChart as RechartsLineChart,
@@ -17,7 +19,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, differenceInHours } from 'date-fns';
 import type { ApiResponse, AnalysisData, ChartDataPoint } from '@shared/types';
 type Status = 'idle' | 'loading' | 'success' | 'error';
 export function HomePage() {
@@ -25,6 +27,18 @@ export function HomePage() {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
+  const [useLogScale, setUseLogScale] = useState(false);
+  const autoLogScale = useMemo(() => {
+    if (!analysisData || analysisData.length < 2) return false;
+    const velocities = analysisData.map(d => d.velocity).filter(v => v > 0);
+    if (velocities.length < 2) return false;
+    const max = Math.max(...velocities);
+    const min = Math.min(...velocities);
+    return max / min > 100; // Auto-enable if max is 100x greater than min
+  }, [analysisData]);
+  useEffect(() => {
+    setUseLogScale(autoLogScale);
+  }, [autoLogScale]);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!url) {
@@ -64,10 +78,23 @@ export function HomePage() {
       peak: Math.max(...analysisData.map(d => d.velocity)),
       average: totalVelocity / analysisData.length,
       totalChanges: totalChanges,
-      totalCommits: analysisData.length + 1, // +1 for the initial commit not in data
+      totalCommits: analysisData.length + 1,
     };
   }, [analysisData]);
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const timeRangeHours = useMemo(() => {
+    if (!analysisData || analysisData.length < 2) return null;
+    const firstDate = parseISO(analysisData[0].date);
+    const lastDate = parseISO(analysisData[analysisData.length - 1].date);
+    return differenceInHours(lastDate, firstDate);
+  }, [analysisData]);
+  const tickFormatter = (str: string) => {
+    const date = parseISO(str);
+    if (timeRangeHours !== null && timeRangeHours <= 72) {
+      return format(date, 'MMM d, HH:mm');
+    }
+    return format(date, 'MMM d');
+  };
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data: ChartDataPoint = payload[0].payload;
       return (
@@ -163,21 +190,25 @@ export function HomePage() {
               <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><LineChart className="text-primary" /> Commit Velocity</CardTitle>
-                    <CardDescription>Lines of code changed (additions + deletions) per minute between commits.</CardDescription>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <CardTitle className="flex items-center gap-2"><LineChart className="text-primary" /> Commit Velocity</CardTitle>
+                        <CardDescription>Lines of code changed (additions + deletions) per minute between commits.</CardDescription>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <Label htmlFor="log-scale-switch">Log Scale</Label>
+                        <Switch id="log-scale-switch" checked={useLogScale} onCheckedChange={setUseLogScale} />
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[400px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <RechartsLineChart data={analysisData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis
-                            dataKey="date"
-                            tickFormatter={(str) => format(parseISO(str), 'MMM d')}
-                            stroke="hsl(var(--muted-foreground))"
-                            fontSize={12}
-                          />
-                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <XAxis dataKey="date" tickFormatter={tickFormatter} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <YAxis scale={useLogScale ? "log" : "linear"} domain={useLogScale ? ['auto', 'auto'] : [0, 'auto']} allowDataOverflow={useLogScale} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent))' }} />
                           <Line type="monotone" dataKey="velocity" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
                         </RechartsLineChart>
