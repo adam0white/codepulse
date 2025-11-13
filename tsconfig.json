@@ -14,7 +14,7 @@
 	"compilerOptions": {
 		"incremental": true,
 		"types": [
-			"@cloudflare/workers-types"
+			"./worker-configuration.d.ts"
 		],
 		"baseUrl": ".",
 		"paths": {

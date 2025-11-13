@@ -38,6 +38,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 -   [Bun](https://bun.sh/)
 -   [Git](https://git-scm.com/)
 -   A Cloudflare account and the [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
+-   A GitHub Personal Access Token (optional but recommended for higher rate limits)
 
 ### Installation
 
@@ -53,7 +54,31 @@ Follow these instructions to get a copy of the project up and running on your lo
     bun install
     ```
 
-3.  **Run the development server:**
+3.  **Set up GitHub API Token (Optional but Recommended):**
+    
+    Without a token, the app uses unauthenticated GitHub API requests with a rate limit of 60 requests per hour. With a token, you get 5,000 requests per hour.
+    
+    To set up a token:
+    
+    a. **Create a GitHub Personal Access Token:**
+       - Go to [GitHub Settings > Developer settings > Personal access tokens > Tokens (classic)](https://github.com/settings/tokens)
+       - Click "Generate new token (classic)"
+       - Give it a descriptive name (e.g., "CodePulse")
+       - Select the `public_repo` scope (for public repositories)
+       - Click "Generate token"
+       - **Copy the token immediately** (you won't be able to see it again)
+    
+    b. **Configure for local development:**
+       - Copy the example file: `cp .dev.vars.example .dev.vars`
+       - Open `.dev.vars` and replace `your_github_token_here` with your actual token
+       - The `.dev.vars` file is already in `.gitignore` and won't be committed
+    
+    c. **Configure for production (Cloudflare Workers):**
+       - Use Wrangler to set the secret: `wrangler secret put GITHUB_TOKEN`
+       - Enter your token when prompted
+       - The secret will be securely stored and available to your worker
+
+4.  **Run the development server:**
     This command starts the Vite frontend development server and the Wrangler development server for the backend worker simultaneously.
     ```bash
     bun run dev
@@ -102,7 +127,14 @@ This project is designed for seamless deployment to Cloudflare Pages with a Func
     npx wrangler login
     ```
 
-2.  **Deploy the application:**
+2.  **Set up GitHub API Token (if not already done):**
+    For production, set the GitHub token as a Cloudflare Workers secret:
+    ```bash
+    wrangler secret put GITHUB_TOKEN
+    ```
+    Enter your GitHub Personal Access Token when prompted. This securely stores the token and makes it available to your worker in production.
+
+3.  **Deploy the application:**
     Run the deploy script. This will build the frontend and deploy both the static assets and the worker function to Cloudflare.
     ```bash
     bun run deploy

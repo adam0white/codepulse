@@ -1,3 +1,11 @@
 
 # Bootstrap marker
 .bootstrap-complete
+node_modules
+.eslintcache
+
+# Environment variables
+.dev.vars
+.env
+.env.local
+.wrangler/

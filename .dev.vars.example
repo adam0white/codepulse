@@ -1,0 +1,10 @@
+# GitHub Personal Access Token
+# Get your token from: https://github.com/settings/tokens
+# Required scopes: public_repo (for public repositories)
+# 
+# Copy this file to .dev.vars and add your token:
+# cp .dev.vars.example .dev.vars
+# Then edit .dev.vars and add your token
+
+GITHUB_TOKEN=your_github_token_here
+

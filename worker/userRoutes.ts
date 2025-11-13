@@ -77,7 +77,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
             const [owner, repo] = pathParts;
             const headers: { 'User-Agent': string; Authorization?: string } = { 'User-Agent': 'CodePulse-App' };
             if (c.env.GITHUB_TOKEN) {
-                headers.Authorization = `token ${c.env.GITHUB_TOKEN}`;
+                headers.Authorization = `Bearer ${c.env.GITHUB_TOKEN}`;
             }
             const commitsUrl = `${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?per_page=100`;
             const commitsRes = await fetch(commitsUrl, { headers });
